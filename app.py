@@ -1,8 +1,10 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
 from pathlib import Path
+
 from sklearn.metrics import (
     accuracy_score, roc_auc_score, precision_score, recall_score,
     f1_score, matthews_corrcoef, confusion_matrix, classification_report
@@ -10,23 +12,67 @@ from sklearn.metrics import (
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+
+# ------------------------ Page setup ------------------------
 st.set_page_config(page_title='Customer Churn – ML Models', page_icon='📊', layout='wide')
 st.title('📊 Customer Churn – Interactive ML Demo (Telco)')
-st.caption('Upload a **test CSV** (with the original Telco schema). Choose a model to evaluate or predict.')
+st.caption('Upload a **test CSV** (Telco schema) or use the saved sample. Choose a model to evaluate or predict.')
 
 MODEL_DIR = Path('model')
 DEFAULT_TEST = Path('data/test_sample.csv')
 
+
+# ------------------------ Utilities ------------------------
 @st.cache_resource
 def list_models():
+    """Return available trained pipelines (*.joblib) from ./model."""
     return sorted([p for p in MODEL_DIR.glob('*.joblib')])
 
 @st.cache_resource
 def load_model(path: Path):
     return joblib.load(path)
 
+def read_csv(file_like_or_path):
+    """Read CSV from upload or local path."""
+    if isinstance(file_like_or_path, (str, Path)):
+        return pd.read_csv(file_like_or_path)
+    return pd.read_csv(file_like_or_path)
 
-def _calc_metrics(y_true, y_prob, y_pred):
+def normalize_churn_series(s: pd.Series) -> pd.Series:
+    """
+    Normalize a 'Churn' column to Yes/No -> 1/0, handling variants:
+    - 'yes', 'y', 'true', '1'  -> 1
+    - 'no', 'n', 'false', '0'  -> 0
+    - trims whitespace, case-insensitive
+    Returns a Float series (0/1/NaN). Caller can dropna() before .astype(int).
+    """
+    # Cast to string, strip, lowercase
+    s = s.astype(str).str.strip().str.lower()
+
+    # Empty-like strings -> NaN
+    s = s.replace({'': np.nan, 'nan': np.nan, 'none': np.nan})
+
+    mapping = {
+        'yes': 1, 'y': 1, 'true': 1, '1': 1,
+        'no': 0,  'n': 0, 'false': 0, '0': 0
+    }
+    return s.map(mapping)
+
+def safe_predict_proba_or_score(pipe, X):
+    """Return probability scores in [0,1] for AUC/logit displays."""
+    if hasattr(pipe, 'predict_proba'):
+        return pipe.predict_proba(X)[:, 1]
+    elif hasattr(pipe, 'decision_function'):
+        scores = pipe.decision_function(X).astype(float)
+        # min-max to 0..1 for AUC compatibility
+        s_min, s_max = np.min(scores), np.max(scores)
+        return (scores - s_min) / (s_max - s_min + 1e-12)
+    else:
+        # No probabilistic score available
+        return np.zeros(len(X), dtype=float)
+
+def calc_metrics(y_true, y_prob, y_pred):
+    """Compute all required metrics; be robust if AUC cannot be computed."""
     try:
         auc = roc_auc_score(y_true, y_prob)
     except Exception:
@@ -40,91 +86,127 @@ def _calc_metrics(y_true, y_prob, y_pred):
         'MCC': matthews_corrcoef(y_true, y_pred)
     }
 
+def plot_confusion(y_true, y_pred, title: str):
+    cm = confusion_matrix(y_true, y_pred)
+    fig, ax = plt.subplots(figsize=(4, 3))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
+                xticklabels=['No', 'Yes'], yticklabels=['No', 'Yes'], ax=ax)
+    ax.set_xlabel('Predicted')
+    ax.set_ylabel('Actual')
+    ax.set_title(title)
+    st.pyplot(fig)
 
-left, right = st.columns([1,1])
+
+# ------------------------ UI Layout ------------------------
+left, right = st.columns([1, 1])
 
 with left:
     st.subheader('1) Choose a Model')
     model_files = list_models()
     if not model_files:
-        st.warning('No models found in ./model. Please run **train_models.py** first.')
+        st.warning('No models found in ./model. Please run **train_models.py** locally and upload the .joblib files.')
     selected = st.selectbox('Available models', options=model_files, format_func=lambda p: p.stem)
 
 with right:
     st.subheader('2) Upload Test CSV (or use sample)')
-    up = st.file_uploader('CSV file', type=['csv'])
-    use_sample = st.checkbox('Use saved sample test set (data/test_sample.csv)', value=True if DEFAULT_TEST.exists() and not up else False)
+    up = st.file_uploader('Upload CSV', type=['csv'])
+    use_sample_default = True if (DEFAULT_TEST.exists() and up is None) else False
+    use_sample = st.checkbox('Use saved sample (data/test_sample.csv)', value=use_sample_default)
 
 
-def _read_csv(file_like_or_path):
-    if isinstance(file_like_or_path, (str, Path)):
-        return pd.read_csv(file_like_or_path)
-    return pd.read_csv(file_like_or_path)
-
+# ------------------------ Inference & Metrics ------------------------
 if selected:
     pipe = load_model(selected)
 
-    # Data
+    # Obtain a dataframe either from upload or from the saved sample
     df = None
     if up is not None:
-        df = _read_csv(up)
+        try:
+            df = read_csv(up)
+            st.success('Uploaded CSV loaded.')
+        except Exception as e:
+            st.error(f'Could not read the uploaded CSV: {e}')
     elif use_sample and DEFAULT_TEST.exists():
-        df = _read_csv(DEFAULT_TEST)
-        st.info('Using sample test set saved during training (data/test_sample.csv).')
+        try:
+            df = read_csv(DEFAULT_TEST)
+            st.info('Using sample test set saved during training (data/test_sample.csv).')
+        except Exception as e:
+            st.error(f'Could not read sample test set: {e}')
 
-    if df is not None:
-        st.write('**Preview**', df.head())
+    if df is not None and not df.empty:
+        st.write('**Preview**')
+        st.dataframe(df.head())
+
+        # Prepare features and (optional) labels
+        df = df.copy()
         has_label = 'Churn' in df.columns
-        if has_label:
-            df['Churn'] = df['Churn'].astype(str).str.strip().str.title()
-            y_true = df['Churn'].map({'Yes':1, 'No':0})
-            X = df.drop(columns=['Churn'])
-        else:
-            y_true = None
-            X = df.copy()
 
+        # X for prediction
+        X = df.drop(columns=['Churn'], errors='ignore')
         if 'customerID' in X.columns:
             X = X.drop(columns=['customerID'])
 
-        # Predict
-        if hasattr(pipe, 'predict_proba'):
-            y_prob = pipe.predict_proba(X)[:,1]
-        else:
-            scores = pipe.decision_function(X)
-            s_min, s_max = scores.min(), scores.max()
-            y_prob = (scores - s_min) / (s_max - s_min + 1e-9)
-        y_pred = pipe.predict(X)
+        # Predict always (for UX)
+        try:
+            y_prob_all = safe_predict_proba_or_score(pipe, X)
+            y_pred_all = pipe.predict(X)
+        except Exception as e:
+            st.error(f'Prediction failed: {e}')
+            st.stop()
 
-        # Show outputs
+        # Display predictions (top rows)
         st.subheader('3) Results')
         pred_df = pd.DataFrame({
-            'Predicted_Prob(Churn)': y_prob,
-            'Predicted_Label': np.where(y_pred==1, 'Yes', 'No')
+            'Predicted_Prob(Churn)': y_prob_all,
+            'Predicted_Label': np.where(y_pred_all == 1, 'Yes', 'No')
         })
         st.dataframe(pred_df.head(20))
 
+        # Compute evaluation metrics only if label exists
         if has_label:
-            metrics = _calc_metrics(y_true, y_prob, y_pred)
-            mcol1, mcol2, mcol3, mcol4, mcol5, mcol6 = st.columns(6)
-            for (k, v), col in zip(metrics.items(), [mcol1, mcol2, mcol3, mcol4, mcol5, mcol6]):
-                col.metric(k, f"{v:.4f}" if v==v else 'NA')
+            # Normalize the 'Churn' column robustly
+            y_map = normalize_churn_series(df['Churn'])
 
-            # Confusion matrix
-            st.markdown('**Confusion Matrix**')
-            cm = confusion_matrix(y_true, y_pred)
-            fig, ax = plt.subplots(figsize=(4,3))
-            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
-                        xticklabels=['No','Yes'], yticklabels=['No','Yes'], ax=ax)
-            ax.set_xlabel('Predicted')
-            ax.set_ylabel('Actual')
-            ax.set_title(f'Confusion Matrix – {selected.stem}')
-            st.pyplot(fig)
+            # Indices where mapping succeeded (0 or 1)
+            valid_idx = y_map.dropna().index
 
-            # Classification report
-            st.markdown('**Classification Report**')
-            rpt = classification_report(y_true, y_pred, target_names=['No','Yes'])
-            st.code(rpt, language='text')
+            # Inform about any dropped rows due to invalid/blank labels
+            dropped = len(df) - len(valid_idx)
+            if dropped > 0:
+                st.warning(
+                    f"{dropped} row(s) had invalid or missing values in 'Churn' and were excluded from metrics. "
+                    "Accepted values include: Yes/No, 1/0, True/False (any case, spaces ignored)."
+                )
+
+            if len(valid_idx) == 0:
+                st.info("No valid ground-truth labels found after cleaning. Showing predictions only.")
+            else:
+                # Align predictions to valid rows for fair evaluation
+                y_true = y_map.loc[valid_idx].astype(int).values
+                y_prob = y_prob_all[valid_idx]
+                y_pred = y_pred_all[valid_idx]
+
+                metrics = calc_metrics(y_true, y_prob, y_pred)
+
+                # KPIs
+                mcol1, mcol2, mcol3, mcol4, mcol5, mcol6 = st.columns(6)
+                for (k, v), col in zip(metrics.items(), [mcol1, mcol2, mcol3, mcol4, mcol5, mcol6]):
+                    if pd.isna(v):
+                        col.metric(k, "NA")
+                    else:
+                        col.metric(k, f"{v:.4f}")
+
+                # Confusion matrix
+                st.markdown('**Confusion Matrix**')
+                plot_confusion(y_true, y_pred, f'Confusion Matrix – {selected.stem}')
+
+                # Classification report
+                st.markdown('**Classification Report**')
+                rpt = classification_report(y_true, y_pred, target_names=['No', 'Yes'])
+                st.code(rpt, language='text')
         else:
-            st.info('No ground-truth **Churn** column detected. Showing predictions only. To view metrics, upload a file that includes the **Churn** column.')
-    else:
-        st.warning('Please upload a CSV or tick "Use sample test set".')
+            st.info("No **Churn** column detected. Showing predictions only. "
+                    "To view evaluation metrics, include a **Churn** column with Yes/No (or 1/0, True/False).")
+
+    elif up is None and not use_sample:
+        st.warning('Please upload a CSV or tick **Use saved sample**.')
