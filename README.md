@@ -12,9 +12,9 @@ Dataset Description
 - Source: Kaggle – Telco Customer Churn  
 - Rows: 7,043  
 - Features: 19 (mixed numeric & categorical)  
-- Target: `Churn` (Yes/No)  
+- Target: Churn (Yes/No)  
 - Notable columns: gender, SeniorCitizen, tenure, Contract, InternetService, PaymentMethod, MonthlyCharges, TotalCharges, etc.  
-- Preprocessing: Missing values imputed; categorical features one-hot encoded; numeric features scaled; `customerID` dropped.
+- Preprocessing: Missing values imputed; categorical features one-hot encoded; numeric features scaled; customerID dropped.
 
 Problem Statement
 The model predicts whether a telecom customer will churn (leave the service) using demographic, account, and service-usage features. The goal is to compare multiple ML algorithms and deploy an interactive Streamlit app for evaluation.
@@ -33,7 +33,7 @@ The following 6 models are trained on the selected dataset:
 
 Metrics captured for each model: Accuracy, AUC Score, Precision, Recall, F1 score, MCC score.
 
-After running `train_models.py`, a consolidated table is exported to folder`metrics/comparison_metrics.csv`.
+After running train_models.py, a consolidated table is exported to folder metrics/comparison_metrics.csv.
 
 Comparison Table is also given below after training the model:
 
@@ -59,12 +59,12 @@ Observations on Model Performance
 Step 3: GitHub Repository
 
 project-folder/
-│-- app.py                 	# Streamlit app (uploading test CSV, pick model, see metrics & confusion matrix)
+│-- app.py               # Streamlit app (uploading test CSV, pick model, see metrics & confusion matrix)
 │-- train_models.py      # Trained 6 models, save pipelines and metrics
-│-- requirements.txt      # Dependencies for local run and Streamlit Cloud
-│-- README.md           # This file
-│-- model/                     # Saved pipelines (*.joblib) – created after training
-│-- metrics/                   # comparison_metrics.csv + per-model reports
+│-- requirements.txt     # Dependencies for local run and Streamlit Cloud
+│-- README.md            # This file
+│-- model/               # Saved pipelines (*.joblib) – created after training
+│-- metrics/             # comparison_metrics.csv + per-model reports
 │-- artifacts/
 │   └─ confusion_matrices/ # PNGs saved during training
 └-- data/
