@@ -152,7 +152,7 @@ def main(args):
         m = evaluate(y_test, y_prob, y_pred)
         m_row = {'ML Model Name': name}; m_row.update(m); rows.append(m_row)
         plot_confusion(y_test, y_pred, name)
-        joblib.dump(pipe, MODEL_DIR / f'{name}.joblib')
+        joblib.dump(pipe, MODEL_DIR / f'{name}.joblib', compress=('xz', 3))
         rpt = classification_report(y_test, y_pred, target_names=['No', 'Yes'])
         (METRICS_DIR / f'{name}_classification_report.txt').write_text(rpt)
 
