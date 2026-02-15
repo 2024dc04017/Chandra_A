@@ -76,7 +76,8 @@ if selected:
         st.write('**Preview**', df.head())
         has_label = 'Churn' in df.columns
         if has_label:
-            y_true = df['Churn'].map({'Yes':1, 'No':0}).astype(int)
+            df['Churn'] = df['Churn'].astype(str).str.strip().str.title()
+            y_true = df['Churn'].map({'Yes':1, 'No':0})
             X = df.drop(columns=['Churn'])
         else:
             y_true = None
