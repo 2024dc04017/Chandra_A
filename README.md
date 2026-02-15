@@ -37,14 +37,7 @@ After running train_models.py, a consolidated table is exported to folder metric
 
 Comparison Table is also given below after training the model:
 
-
-ML Model Name	      Accuracy	    AUC	    Precision	    Recall	    F1	    MCC
-LogisticRegression	0.806	        0.842	  0.657	        0.559	      0.604	  0.479
-DecisionTree	      0.729	        0.657	  0.490	        0.505	      0.497	  0.312
-KNN	                0.778	        0.822	  0.584	        0.567	      0.575	  0.425
-GaussianNB	        0.695	        0.807	  0.459	        0.837	      0.593	  0.424
-RandomForest	      0.779	        0.817	  0.606	        0.473	      0.532	  0.395
-GradientBoosting	  0.806	        0.843	  0.674	        0.524	      0.589	  0.472
+<img width="461" height="149" alt="image" src="https://github.com/user-attachments/assets/c52f5ae9-b358-460c-a8d2-23d4d9946a4c" />
 
 
 Observations on Model Performance
@@ -58,17 +51,7 @@ Observations on Model Performance
 
 Step 3: GitHub Repository
 
-project-folder/
-│-- app.py               # Streamlit app (uploading test CSV, pick model, see metrics & confusion matrix)
-│-- train_models.py      # Trained 6 models, save pipelines and metrics
-│-- requirements.txt     # Dependencies for local run and Streamlit Cloud
-│-- README.md            # This file
-│-- model/               # Saved pipelines (*.joblib) – created after training
-│-- metrics/             # comparison_metrics.csv + per-model reports
-│-- artifacts/
-│   └─ confusion_matrices/ # PNGs saved during training
-└-- data/
-    └─ test_sample.csv     # Generated test split for quick app demo
+<img width="598" height="230" alt="image" src="https://github.com/user-attachments/assets/8f8f7b98-905b-4917-a67e-192b3d805b0a" />
 
 
 Step 4: Create requirements.txt
