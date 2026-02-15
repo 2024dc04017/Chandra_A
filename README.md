@@ -50,8 +50,7 @@ Observations on Model Performance
 
 
 Step 3: GitHub Repository
-
-<img width="598" height="230" alt="image" src="https://github.com/user-attachments/assets/8f8f7b98-905b-4917-a67e-192b3d805b0a" />
+<img width="611" height="223" alt="image" src="https://github.com/user-attachments/assets/e50adaba-93f6-4443-8bff-9d1d28466f04" />
 
 
 Step 4: Create requirements.txt
